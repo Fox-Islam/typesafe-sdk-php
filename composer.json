@@ -29,7 +29,19 @@
         "psr/http-message": "^1.1 || ^2.0",
         "psr/log": "^1.1 || ^2.0 || ^3.0"
     },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Phox\\TypeSafe\\Laravel\\TypeSafeServiceProvider"
+            ]
+        }
+    },
+    "suggest": {
+        "illuminate/support": "Registers the client as a singleton from config/typesafe.php (Laravel 11+)"
+    },
     "require-dev": {
+        "illuminate/support": "^11.0 || ^12.0",
+        "orchestra/testbench": "^9.0 || ^10.0",
         "phpstan/phpstan": "^1.12",
         "phpunit/phpunit": "^11.5"
     },

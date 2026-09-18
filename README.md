@@ -94,6 +94,48 @@ $response->requestId();        // the generation id
 `cost()` returns `null` when the provider did not price the call, and `0.0` when
 it priced it at nothing — those are different answers.
 
+## Laravel
+
+The package auto-registers a `Client` singleton, so it can be injected straight
+away and nothing needs wiring:
+
+```php
+public function __construct(private readonly Client $typeSafe) {}
+```
+
+Set `TYPESAFE_API_KEY` (or `OPENROUTER_API_KEY`) and that is the whole setup.
+To change anything else, publish the config:
+
+```sh
+php artisan vendor:publish --tag=typesafe-config
+```
+
+```php
+// config/typesafe.php
+'provider' => env('TYPESAFE_PROVIDER', 'typesafe'),
+'keys' => [
+    'typesafe' => env('TYPESAFE_API_KEY'),
+    'openrouter' => env('OPENROUTER_API_KEY'),
+],
+'model' => env('TYPESAFE_DEFAULT_MODEL', 'jev-latest'),
+'timeout' => (float) env('TYPESAFE_TIMEOUT', 10.0),
+'log' => ['enabled' => true, 'channel' => null, 'level' => env('TYPESAFE_LOG_LEVEL', 'warn')],
+```
+
+A config value that is null or empty falls through to the environment variable
+for that setting, so publishing the file does not force you to fill it in.
+
+**Publish the config if you run `php artisan config:cache`.** With a cached
+config Laravel never loads the `.env`, so a key left to an environment lookup
+resolves to nothing — and because a missing key is only reported when a request
+is sent, that shows up as calls failing in production rather than as a boot
+error. Reading the key from config is what avoids it.
+
+The client logs through Laravel's logger; `log.channel` names a channel and
+`log.level` accepts `error`, `warn`, `info`, `debug` or `off`. Credential
+headers are redacted, bodies are not, so `debug` writes your state and answers
+to the log.
+
 ## Questions
 
 Every question is built fluently and keyed by the name its answer comes back
