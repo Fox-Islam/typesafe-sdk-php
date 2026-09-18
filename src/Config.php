@@ -6,6 +6,7 @@ namespace Phox\TypeSafe;
 
 use Phox\TypeSafe\Contracts\Transport;
 use Phox\TypeSafe\Enums\LogLevel;
+use Phox\TypeSafe\Enums\Provider;
 use Phox\TypeSafe\Exceptions\TypeSafeException;
 use Phox\TypeSafe\Http\GuzzleTransport;
 use Phox\TypeSafe\Retry\RetryPolicy;
@@ -21,10 +22,15 @@ use Psr\Log\NullLogger;
  */
 final class Config
 {
+    private Provider $provider;
     private ?string $apiKey;
     private string $baseUrl;
     private string $defaultModel;
     private float $timeout;
+
+    /** Whether the key and base URL were pinned by the caller, so switching provider must not move them. */
+    private bool $apiKeyPinned;
+    private bool $baseUrlPinned;
 
     /** @var array<string, string> */
     private array $defaultHeaders = [];
@@ -34,17 +40,28 @@ final class Config
     private LoggerInterface $logger;
     private ?Transport $transport = null;
 
-    public function __construct(?string $apiKey = null, ?string $baseUrl = null, ?string $defaultModel = null)
-    {
-        $this->apiKey = Env::fallback($apiKey, Env::API_KEY);
-        $this->baseUrl = rtrim(Env::fallback($baseUrl, Env::BASE_URL, TypeSafe::DEFAULT_BASE_URL) ?? '', '/');
+    public function __construct(
+        ?string $apiKey = null,
+        ?string $baseUrl = null,
+        ?string $defaultModel = null,
+        ?Provider $provider = null,
+    ) {
+        $fromEnv = Env::read(Env::PROVIDER);
+        $this->provider = $provider
+            ?? ($fromEnv === null ? Provider::TypeSafe : Provider::parse($fromEnv, Env::PROVIDER));
+
+        $this->apiKeyPinned = $apiKey !== null;
+        $this->baseUrlPinned = $baseUrl !== null || Env::read(Env::BASE_URL) !== null;
+
+        $this->apiKey = $apiKey ?? Env::read($this->provider->apiKeyEnv());
+        $this->baseUrl = rtrim(Env::fallback($baseUrl, Env::BASE_URL, $this->provider->baseUrl()) ?? '', '/');
         $this->defaultModel = Env::fallback($defaultModel, Env::DEFAULT_MODEL, TypeSafe::DEFAULT_MODEL) ?? '';
         $this->timeout = TypeSafe::DEFAULT_TIMEOUT;
         $this->retry = RetryPolicy::default();
         $this->logger = new NullLogger();
 
-        $fromEnv = Env::read(Env::LOG_LEVEL);
-        $this->logLevel = $fromEnv === null ? LogLevel::DEFAULT : LogLevel::parse($fromEnv, Env::LOG_LEVEL);
+        $logLevel = Env::read(Env::LOG_LEVEL);
+        $this->logLevel = $logLevel === null ? LogLevel::DEFAULT : LogLevel::parse($logLevel, Env::LOG_LEVEL);
     }
 
     /**
@@ -54,7 +71,7 @@ final class Config
     {
         return $this->apiKey ?? throw new TypeSafeException(sprintf(
             'No API key was provided. Pass one to the Client constructor or apiKey() method, or set the %s environment variable.',
-            Env::API_KEY,
+            $this->provider->apiKeyEnv(),
         ));
     }
 
@@ -66,6 +83,29 @@ final class Config
     public function setApiKey(string $apiKey): void
     {
         $this->apiKey = $apiKey;
+        $this->apiKeyPinned = true;
+    }
+
+    public function getProvider(): Provider
+    {
+        return $this->provider;
+    }
+
+    /**
+     * Switch providers, moving the base URL and the key with it unless the
+     * caller pinned either of them.
+     */
+    public function setProvider(Provider $provider): void
+    {
+        $this->provider = $provider;
+
+        if (! $this->baseUrlPinned) {
+            $this->baseUrl = rtrim($provider->baseUrl(), '/');
+        }
+
+        if (! $this->apiKeyPinned) {
+            $this->apiKey = Env::read($provider->apiKeyEnv());
+        }
     }
 
     public function getBaseUrl(): string
@@ -76,6 +116,7 @@ final class Config
     public function setBaseUrl(string $baseUrl): void
     {
         $this->baseUrl = rtrim($baseUrl, '/');
+        $this->baseUrlPinned = true;
     }
 
     public function getDefaultModel(): string

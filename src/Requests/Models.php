@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phox\TypeSafe\Requests;
 
 use Phox\TypeSafe\Config;
+use Phox\TypeSafe\Exceptions\TypeSafeException;
 use Phox\TypeSafe\Http\Requester;
 use Phox\TypeSafe\Http\RequestOptions;
 use Phox\TypeSafe\Responses\ModelCard;
@@ -71,11 +72,22 @@ final class Models
     }
 
     /**
+     * @throws TypeSafeException The provider has no model catalogue.
      * @throws \Phox\TypeSafe\Exceptions\ApiException The API rejected the request.
      * @throws \Phox\TypeSafe\Exceptions\ConnectionException The request never completed.
      */
     public function list(): ModelList
     {
+        $provider = $this->config->getProvider();
+
+        if (! $provider->listsModels()) {
+            throw new TypeSafeException(sprintf(
+                'The %s provider does not publish a model catalogue; name a model directly, e.g. %s.',
+                $provider->value,
+                TypeSafe::OPENROUTER_MODEL_LATEST,
+            ));
+        }
+
         $response = $this->requester->send(
             'GET',
             TypeSafe::MODELS_PATH,

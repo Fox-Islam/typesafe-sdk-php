@@ -13,7 +13,13 @@ final class Env
     /** Required API key; used when `apiKey` is omitted. */
     public const string API_KEY = 'TYPESAFE_API_KEY';
 
-    /** API root; defaults to `https://api.typesafe.ai`. */
+    /** OpenRouter key; used instead of {@see API_KEY} when the provider is `openrouter`. */
+    public const string OPENROUTER_API_KEY = 'OPENROUTER_API_KEY';
+
+    /** `typesafe` or `openrouter`; defaults to `typesafe`. */
+    public const string PROVIDER = 'TYPESAFE_PROVIDER';
+
+    /** API root; defaults to the provider's own host. */
     public const string BASE_URL = 'TYPESAFE_BASE_URL';
 
     /** Default model name; defaults to `jev-latest`. */

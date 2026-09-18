@@ -41,10 +41,14 @@ final class ApiResponse
         return Headers::get($this->headers, $name);
     }
 
-    /** Request ID from `x-typesafe-request-id`, when the API sent one. */
+    /**
+     * The id to quote in a bug report: `x-typesafe-request-id` from TypeSafe,
+     * or `x-generation-id` when the call went through OpenRouter.
+     */
     public function requestId(): ?string
     {
-        return $this->header(TypeSafe::REQUEST_ID_HEADER);
+        return $this->header(TypeSafe::REQUEST_ID_HEADER)
+            ?? $this->header(TypeSafe::GENERATION_ID_HEADER);
     }
 
     /** Decoded JSON, the raw response text, or `null` for an empty body. */

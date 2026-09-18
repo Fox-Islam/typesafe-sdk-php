@@ -1,9 +1,9 @@
 {
     "name": "phox/typesafe-sdk-php",
-    "description": "A PHP SDK for the TypeSafe AI API",
+    "description": "A PHP SDK for the TypeSafe AI API, direct or through OpenRouter",
     "type": "library",
     "license": "MIT",
-    "keywords": ["typesafe", "sdk", "ai", "classification", "llm"],
+    "keywords": ["typesafe", "sdk", "ai", "classification", "llm", "openrouter"],
     "homepage": "https://github.com/Fox-Islam/typesafe-sdk-php",
     "authors": [
         {

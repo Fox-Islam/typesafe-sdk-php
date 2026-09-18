@@ -4,6 +4,9 @@ Ask a model named questions about a piece of text or a JSON structure, and get
 back answers shaped by the questions you asked — a probability for a yes/no
 question, a label for a choice, a level on a rubric for a score.
 
+Jev is reachable two ways: directly from TypeSafe, or through OpenRouter. One
+call switches between them and nothing else about your code changes.
+
 ## Install
 
 ```sh
@@ -14,7 +17,8 @@ Requires PHP 8.3 or newer.
 
 ## Quickstart
 
-Set `TYPESAFE_API_KEY` in your environment, then:
+Set `TYPESAFE_API_KEY` in your environment (or `OPENROUTER_API_KEY` — see
+[Providers](#providers)), then:
 
 ```php
 use Phox\TypeSafe\Client;
@@ -29,6 +33,66 @@ $response = $client->systemOne()
 echo $response->choice('category')->choice();      // 'billing'
 echo $response->choice('category')->confidence();  // 0.91
 ```
+
+## Providers
+
+Jev is served both by TypeSafe directly and by OpenRouter's decisions endpoint.
+The request and answer bodies are the same on both, so the provider only decides
+the host, the path and which key is read:
+
+```php
+$client = Client::make()->openRouter();   // reads OPENROUTER_API_KEY
+```
+
+or set `TYPESAFE_PROVIDER=openrouter` and construct the client normally.
+
+| | TypeSafe | OpenRouter |
+| --- | --- | --- |
+| Host | `https://api.typesafe.ai` | `https://openrouter.ai` |
+| Path | `/v1/systemone` | `/api/alpha/decisions` |
+| Key | `TYPESAFE_API_KEY` | `OPENROUTER_API_KEY` |
+| Request id | `x-typesafe-request-id` | `x-generation-id`, also in the body |
+| Per-call cost | not reported | `$response->usage()->cost()` |
+| `models()->list()` | yes | no catalogue — name the model directly |
+
+`baseUrl` and `apiKey` follow the provider when you switch, unless you set
+either of them yourself, in which case yours is kept:
+
+```php
+Client::make()->openRouter()->getBaseUrl();                     // openrouter.ai
+Client::make(baseUrl: 'https://proxy.example.com')->openRouter()
+    ->getBaseUrl();                                             // proxy.example.com
+```
+
+### Model names
+
+`jev-latest` — the SDK default — works on both providers and resolves to the
+same build. OpenRouter also accepts its own namespaced names:
+
+| Name | Meaning |
+| --- | --- |
+| `jev-latest` | the current build, on either provider |
+| `~typesafe/jev-latest` | the same, in OpenRouter's naming |
+| `typesafe/jev-1.13` | a pinned build |
+
+The leading `~` marks a floating alias and pairs only with `-latest`;
+`~typesafe/jev-1.13` is rejected.
+
+### What comes back
+
+The answers are identical either way. OpenRouter adds two things:
+
+```php
+$response = Client::make()->openRouter()->systemOne()
+    ->state($ticket)->noul('urgent', 'Is the customer blocked?')->send();
+
+$response->provider();         // 'TypeSafe' — who actually served it
+$response->usage()->cost();    // charge in USD, or null calling TypeSafe directly
+$response->requestId();        // the generation id
+```
+
+`cost()` returns `null` when the provider did not price the call, and `0.0` when
+it priced it at nothing — those are different answers.
 
 ## Questions
 
@@ -153,6 +217,10 @@ foreach ($models as $model) {
 }
 ```
 
+Only TypeSafe publishes a catalogue. On OpenRouter this throws a
+`TypeSafeException` telling you to name a model directly, rather than returning
+an empty list that would read as "no models available".
+
 ## Configuring the client
 
 Values given in code win over environment variables, which win over the SDK
@@ -160,11 +228,15 @@ defaults.
 
 | Setting | Environment variable | Default |
 | --- | --- | --- |
-| `apiKey` | `TYPESAFE_API_KEY` | — (required) |
-| `baseUrl` | `TYPESAFE_BASE_URL` | `https://api.typesafe.ai` |
+| `apiKey` | `TYPESAFE_API_KEY` or `OPENROUTER_API_KEY` | — (required) |
+| `provider` | `TYPESAFE_PROVIDER` | `typesafe` |
+| `baseUrl` | `TYPESAFE_BASE_URL` | the provider's host |
 | `defaultModel` | `TYPESAFE_DEFAULT_MODEL` | `jev-latest` |
 | `logLevel` | `TYPESAFE_LOG_LEVEL` | `warn` |
 | `timeout` | — | 10 seconds per attempt |
+
+Which key is read follows the provider, so both can sit in the environment at
+once and only the relevant one is used.
 
 ```php
 use Phox\TypeSafe\Client;
@@ -172,6 +244,7 @@ use Phox\TypeSafe\Enums\LogLevel;
 use Phox\TypeSafe\Retry\RetryPolicy;
 
 $client = Client::make($apiKey)
+    ->openRouter()
     ->defaultModel('jev-latest')
     ->timeout(30)
     ->header('X-Tenant', 'acme')

@@ -14,7 +14,6 @@ use Phox\TypeSafe\Questions\Question;
 use Phox\TypeSafe\Questions\Score;
 use Phox\TypeSafe\Responses\SystemOneResponse;
 use Phox\TypeSafe\Retry\RetryPolicy;
-use Phox\TypeSafe\TypeSafe;
 
 /**
  * Builds and sends a System One call: some state, and the questions to answer
@@ -217,7 +216,7 @@ final class SystemOne
     {
         $response = $this->requester->send(
             'POST',
-            TypeSafe::SYSTEM_ONE_PATH,
+            $this->config->getProvider()->systemOnePath(),
             $this->toArray(),
             new RequestOptions($this->timeout, $this->headers, $this->retry),
         );

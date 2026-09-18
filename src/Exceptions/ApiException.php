@@ -48,10 +48,14 @@ class ApiException extends TypeSafeException
         return Headers::get($this->headers, $name);
     }
 
-    /** Request ID from `x-typesafe-request-id`, when the API sent one. */
+    /**
+     * The id to quote in a bug report: `x-typesafe-request-id` from TypeSafe,
+     * or `x-generation-id` when the call went through OpenRouter.
+     */
     public function getRequestId(): ?string
     {
-        return $this->getHeader(TypeSafe::REQUEST_ID_HEADER);
+        return $this->getHeader(TypeSafe::REQUEST_ID_HEADER)
+            ?? $this->getHeader(TypeSafe::GENERATION_ID_HEADER);
     }
 
     /**

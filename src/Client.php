@@ -6,6 +6,7 @@ namespace Phox\TypeSafe;
 
 use Phox\TypeSafe\Contracts\Transport;
 use Phox\TypeSafe\Enums\LogLevel;
+use Phox\TypeSafe\Enums\Provider;
 use Phox\TypeSafe\Http\Psr18Transport;
 use Phox\TypeSafe\Http\Requester;
 use Phox\TypeSafe\Requests\Models;
@@ -20,7 +21,14 @@ use Psr\Log\LoggerInterface;
  *
  * Settings supplied in code win over environment variables
  * (`TYPESAFE_API_KEY`, `TYPESAFE_BASE_URL`, `TYPESAFE_DEFAULT_MODEL`,
- * `TYPESAFE_LOG_LEVEL`), which win over the SDK defaults.
+ * `TYPESAFE_LOG_LEVEL`, `TYPESAFE_PROVIDER`), which win over the SDK defaults.
+ *
+ * Jev can be reached directly from TypeSafe or through OpenRouter, and nothing
+ * a caller writes changes between them:
+ *
+ * ```php
+ * Client::make()->openRouter();          // reads OPENROUTER_API_KEY
+ * ```
  *
  * ```php
  * $client = Client::make()->defaultModel('jev-latest');
@@ -43,13 +51,18 @@ final class Client
     private readonly Requester $requester;
 
     /**
-     * @param string|null $apiKey Falls back to the `TYPESAFE_API_KEY` environment variable.
-     * @param string|null $baseUrl Falls back to `TYPESAFE_BASE_URL`, then `https://api.typesafe.ai`.
+     * @param string|null $apiKey Falls back to the provider's key variable, `TYPESAFE_API_KEY` or `OPENROUTER_API_KEY`.
+     * @param string|null $baseUrl Falls back to `TYPESAFE_BASE_URL`, then the provider's own host.
      * @param string|null $defaultModel Falls back to `TYPESAFE_DEFAULT_MODEL`, then `jev-latest`.
+     * @param Provider|null $provider Falls back to `TYPESAFE_PROVIDER`, then TypeSafe.
      */
-    public function __construct(?string $apiKey = null, ?string $baseUrl = null, ?string $defaultModel = null)
-    {
-        $this->config = new Config($apiKey, $baseUrl, $defaultModel);
+    public function __construct(
+        ?string $apiKey = null,
+        ?string $baseUrl = null,
+        ?string $defaultModel = null,
+        ?Provider $provider = null,
+    ) {
+        $this->config = new Config($apiKey, $baseUrl, $defaultModel, $provider);
         $this->requester = new Requester($this->config);
     }
 
@@ -57,9 +70,13 @@ final class Client
      * The same as the constructor, so configuration can be chained from a
      * single expression.
      */
-    public static function make(?string $apiKey = null, ?string $baseUrl = null, ?string $defaultModel = null): self
-    {
-        return new self($apiKey, $baseUrl, $defaultModel);
+    public static function make(
+        ?string $apiKey = null,
+        ?string $baseUrl = null,
+        ?string $defaultModel = null,
+        ?Provider $provider = null,
+    ): self {
+        return new self($apiKey, $baseUrl, $defaultModel, $provider);
     }
 
     /**
@@ -83,6 +100,28 @@ final class Client
         $this->config->setApiKey($apiKey);
 
         return $this;
+    }
+
+    /**
+     * Send calls to a different provider. The base URL and the API key follow it
+     * unless you set either of them yourself, so switching is a one-liner.
+     */
+    public function provider(Provider|string $provider): self
+    {
+        $this->config->setProvider(
+            $provider instanceof Provider ? $provider : Provider::parse($provider, 'the provider() argument'),
+        );
+
+        return $this;
+    }
+
+    /**
+     * Reach Jev through OpenRouter instead of calling TypeSafe directly, reading
+     * `OPENROUTER_API_KEY` unless a key was set in code.
+     */
+    public function openRouter(): self
+    {
+        return $this->provider(Provider::OpenRouter);
     }
 
     /**
@@ -192,6 +231,11 @@ final class Client
         return $this->transport(new Psr18Transport($client));
     }
 
+    public function getProvider(): Provider
+    {
+        return $this->config->getProvider();
+    }
+
     public function getBaseUrl(): string
     {
         return $this->config->getBaseUrl();
@@ -224,7 +268,7 @@ final class Client
     }
 
     /**
-     * Whether an API key was supplied in code or found in `TYPESAFE_API_KEY`.
+     * Whether an API key was supplied in code or found in the provider's key variable.
      * Requests fail with a {@see \Phox\TypeSafe\Exceptions\TypeSafeException} when it is missing.
      */
     public function hasApiKey(): bool
@@ -235,11 +279,12 @@ final class Client
     /**
      * Keep the API key out of stack traces, `var_dump()` and error reports.
      *
-     * @return array{baseUrl: string, defaultModel: string, timeout: float, logLevel: string, hasApiKey: bool}
+     * @return array{provider: string, baseUrl: string, defaultModel: string, timeout: float, logLevel: string, hasApiKey: bool}
      */
     public function __debugInfo(): array
     {
         return [
+            'provider' => $this->config->getProvider()->value,
             'baseUrl' => $this->config->getBaseUrl(),
             'defaultModel' => $this->config->getDefaultModel(),
             'timeout' => $this->config->getTimeout(),
@@ -251,12 +296,14 @@ final class Client
     /**
      * The environment variable names the client reads.
      *
-     * @return array{apiKey: string, baseUrl: string, defaultModel: string, logLevel: string}
+     * @return array{apiKey: string, openRouterApiKey: string, provider: string, baseUrl: string, defaultModel: string, logLevel: string}
      */
     public static function environmentVariables(): array
     {
         return [
             'apiKey' => Env::API_KEY,
+            'openRouterApiKey' => Env::OPENROUTER_API_KEY,
+            'provider' => Env::PROVIDER,
             'baseUrl' => Env::BASE_URL,
             'defaultModel' => Env::DEFAULT_MODEL,
             'logLevel' => Env::LOG_LEVEL,

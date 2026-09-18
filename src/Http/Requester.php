@@ -103,7 +103,7 @@ final class Requester
             $status = $response->getStatusCode();
             $responseHeaders = Headers::flatten($response->getHeaders());
             $decoded = Json::decode((string) $response->getBody());
-            $requestId = Headers::get($responseHeaders, TypeSafe::REQUEST_ID_HEADER);
+            $requestId = Headers::get($responseHeaders, $this->config->getProvider()->requestIdHeader());
 
             $this->log(LogLevel::Info, sprintf(
                 '%s <- %d in %s%s',

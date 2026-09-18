@@ -26,6 +26,7 @@ final class SystemOneResponse
         private readonly Usage $usage,
         private readonly array $data,
         private readonly ?string $requestId,
+        private readonly ?string $provider,
     ) {}
 
     /**
@@ -46,12 +47,17 @@ final class SystemOneResponse
             $answers[(string) $name] = Answer::fromArray($answer);
         }
 
+        // OpenRouter puts the generation id in the body as well as the header;
+        // fall back to it so requestId() is answerable whichever provider ran the call.
+        $bodyId = is_string($data['id'] ?? null) && $data['id'] !== '' ? $data['id'] : null;
+
         return new self(
             is_string($data['model'] ?? null) ? $data['model'] : '',
             array_filter($answers, static fn (?Answer $answer): bool => $answer !== null),
             Usage::fromArray(is_array($data['usage'] ?? null) ? $data['usage'] : []),
             $data,
-            $requestId,
+            $requestId ?? $bodyId,
+            is_string($data['provider'] ?? null) && $data['provider'] !== '' ? $data['provider'] : null,
         );
     }
 
@@ -66,10 +72,23 @@ final class SystemOneResponse
         return $this->usage;
     }
 
-    /** Request ID from `x-typesafe-request-id`, when the API sent one. */
+    /**
+     * The id to quote in a bug report: `x-typesafe-request-id` from TypeSafe,
+     * or the generation id from OpenRouter.
+     */
     public function requestId(): ?string
     {
         return $this->requestId;
+    }
+
+    /**
+     * Who actually served the call, when the response names them — `TypeSafe`
+     * for a Jev call routed through OpenRouter. `null` when calling TypeSafe
+     * directly, where there is only one answer.
+     */
+    public function provider(): ?string
+    {
+        return $this->provider;
     }
 
     /**
