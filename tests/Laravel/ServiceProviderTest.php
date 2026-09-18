@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phox\TypeSafe\Tests\Laravel;
 
+use Illuminate\Support\Facades\Log;
 use Orchestra\Testbench\TestCase;
 use Phox\TypeSafe\Client;
 use Phox\TypeSafe\Enums\LogLevel;
@@ -131,6 +132,14 @@ final class ServiceProviderTest extends TestCase
         $this->expectExceptionMessage('config/typesafe.php');
 
         $this->client();
+    }
+
+    #[Test]
+    public function it_still_builds_when_the_log_facade_is_mocked(): void
+    {
+        Log::shouldReceive('info')->andReturnNull();
+
+        $this->assertInstanceOf(Client::class, $this->client());
     }
 
     #[Test]

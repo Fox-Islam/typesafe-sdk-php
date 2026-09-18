@@ -6,6 +6,8 @@ namespace Phox\TypeSafe\Laravel;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
+use Psr\Log\LoggerInterface;
+use Throwable;
 use Phox\TypeSafe\Client;
 use Phox\TypeSafe\Enums\LogLevel;
 use Phox\TypeSafe\Enums\Provider;
@@ -77,7 +79,28 @@ final class TypeSafeServiceProvider extends ServiceProvider
             $client->logLevel($level);
         }
 
-        return $client->logger(Log::channel($this->string('typesafe.log.channel')));
+        return $this->withLogger($client);
+    }
+
+    /**
+     * Resolving a channel must never be able to fail the client.
+     *
+     * A host app that swaps the Log facade for a test double breaks this in two
+     * different ways — a partial mock answers channel() with null, a strict one
+     * throws BadMethodCallException — and either turned an unrelated assertion
+     * in the host's own suite into a failure from inside this package. The
+     * client simply goes without a logger instead.
+     */
+    private function withLogger(Client $client): Client
+    {
+        try {
+            /** @var mixed $logger Declared as a LoggerInterface, but a double may answer otherwise. */
+            $logger = Log::channel($this->string('typesafe.log.channel'));
+        } catch (Throwable) {
+            return $client;
+        }
+
+        return $logger instanceof LoggerInterface ? $client->logger($logger) : $client;
     }
 
     private function provider(): Provider
