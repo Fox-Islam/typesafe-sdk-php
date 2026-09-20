@@ -389,8 +389,9 @@ PSR-18 has no per-request timeout, so configure one on the client you pass in:
 $client->httpClient($psr18Client);
 ```
 
-For anything else — another HTTP stack, or a stub in tests — implement
-`Phox\TypeSafe\Contracts\Transport`:
+For anything else — another HTTP stack, or a transport of your own — implement
+`Phox\TypeSafe\Contracts\Transport`. Faking the API in tests needs none of
+this: see [Testing](#testing).
 
 ```php
 use Phox\TypeSafe\Contracts\Transport;
@@ -404,6 +405,113 @@ final class RecordingTransport implements Transport
 }
 
 $client->transport(new RecordingTransport());
+```
+
+## Testing
+
+Tests should not call Jev: the answers move, the network fails, and a suite that
+depends on either is flaky. `Phox\TypeSafe\Testing\FakeTypeSafe` ships with the
+package and answers in its place.
+
+```php
+use Phox\TypeSafe\Testing\FakeTypeSafe;
+
+$fake = new FakeTypeSafe();
+
+$router = new TicketRouter($fake->client());
+$router->route('I was charged twice.');
+
+self::assertSame('I was charged twice.', $fake->lastCall()->state());
+```
+
+Nothing has to be scripted. The fake reads the questions off the request and
+answers every one of them in the shape that question asked for, identically on
+every run: a yes at `0.75`, the first label, level `0`, with the rest of the
+probability split evenly over the other outcomes. A score answer comes back with
+the rubric it was asked about as its legend, as the API sends it.
+
+`$fake->client()` is a client built for this — no API key, no network, and
+retries off, so a failure you queue surfaces as itself. To fake the client an
+application already configured, including the singleton Laravel registered,
+point that one at the fake instead:
+
+```php
+$fake->bind($this->app->make(Client::class));
+```
+
+### Scripting answers
+
+`FakeAnswers` writes a response in answers rather than in JSON. Script what the
+test asserts on; anything else it asked stays simulated.
+
+```php
+use Phox\TypeSafe\Testing\FakeAnswers;
+
+$fake->reply(
+    FakeAnswers::make()
+        ->choice('category', 'billing')     // probabilities fill in from the options asked
+        ->noul('urgent', true)              // 0.9, or pass a probability of yes
+        ->score('severity', 2.0),
+);
+```
+
+| Method | What it scripts |
+| --- | --- |
+| `noul($name, 0.82\|true\|false)` | a yes/no answer |
+| `choice($name, $label, $probabilities?, $confidence?)` | the selected label |
+| `score($name, $score, $confidence?, $probabilities?, $legend?)` | a score on the rubric |
+| `raw($name, $payload)` | an answer payload verbatim |
+| `omit($name)` | leaves a question unanswered, as a dropped answer would |
+| `model()`, `usage()`, `provider()`, `id()`, `with()` | the fields around the answers |
+
+Each `reply()` covers one call, in order; `alwaysReply()` covers every System
+One call the queue does not. Both also take a callback, which receives the call
+and returns the answers, for a fake that responds to what was asked:
+
+```php
+$fake->alwaysReply(fn (FakeCall $call) => FakeAnswers::make()
+    ->noul('urgent', str_contains((string) $call->state(), 'ASAP')));
+```
+
+### Failures
+
+```php
+$fake->fail(429);                                  // a RateLimitException
+$fake->fail(500, times: 3);                        // enough for a client that retries
+$fake->throw(new TimeoutException(10.0));          // nothing came back at all
+```
+
+### Models
+
+`models()->list()` comes back with one card for `jev-latest` unless a test says
+otherwise:
+
+```php
+$fake->models(['jev-1.13' => 'A pinned build', 'jev-latest']);
+```
+
+### What was asked
+
+`$fake->calls()` holds a `FakeCall` per request, decoded so assertions read in
+terms of questions rather than JSON.
+
+| | |
+| --- | --- |
+| `state()`, `model()` | what the call was about, and the model it resolved to |
+| `questions()`, `question($name)`, `questionType($name)`, `asked($name)` | the questions as sent |
+| `method()`, `url()`, `path()`, `headers()`, `header($name)` | the request itself |
+| `retryCount()`, `timeout()` | which attempt this was, and what it was allowed |
+| `body()`, `request()` | the raw payload and the PSR-7 request |
+
+`$fake->callCount()`, `$fake->lastCall()`, `$fake->asked($name)` and
+`$fake->systemOneCalls()` cover the common assertions; `$fake->reset()` clears
+calls and scripts between them.
+
+For a test that needs a particular status code or body rather than answers,
+`Phox\TypeSafe\Testing\FakeTransport` is the layer underneath, and takes both:
+
+```php
+$client->transport((new FakeTransport())->queue('<html>502</html>', 502));
 ```
 
 ## Development

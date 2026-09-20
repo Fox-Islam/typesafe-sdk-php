@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phox\TypeSafe\Tests\Support;
 
 use Phox\TypeSafe\Client;
+use Phox\TypeSafe\Testing\FakeTransport;
 use PHPUnit\Framework\TestCase;
 
 abstract class ClientTestCase extends TestCase
