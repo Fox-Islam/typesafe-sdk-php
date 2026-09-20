@@ -81,15 +81,27 @@ final class FakeTypeSafe
      */
     public function client(): Client
     {
-        return $this->client ??= $this->bind(Client::make(self::API_KEY)->retry(RetryPolicy::none()));
+        return $this->client ??= $this->bind(Client::make(self::API_KEY));
     }
 
     /**
      * Point an existing client at this fake — the one an application already
      * resolved from its container, for instance — and hand it back.
+     *
+     * Retries come off with it, so one queued failure is one failed call. A
+     * client configured for production retries 408s, 429s and 5xx, which in a
+     * test means a queued failure is swallowed and the reply queued behind it
+     * is spent answering the retry — a test that then fails somewhere else
+     * entirely. Pass `retries: true` to keep the client's own policy, which is
+     * what a test of retrying wants; {@see FakeCall::retryCount()} says which
+     * attempt each call was.
      */
-    public function bind(Client $client): Client
+    public function bind(Client $client, bool $retries = false): Client
     {
+        if (! $retries) {
+            $client->retry(RetryPolicy::none());
+        }
+
         return $client->transport($this->transport);
     }
 

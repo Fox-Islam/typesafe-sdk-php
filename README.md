@@ -439,6 +439,16 @@ point that one at the fake instead:
 $fake->bind($this->app->make(Client::class));
 ```
 
+`bind()` takes that client's retries off too. A client configured for
+production retries 408s, 429s and 5xx, so a queued failure would be retried and
+the reply queued behind it spent answering the retry — a test that then fails
+somewhere else entirely. Keep the policy where the retrying is the thing under
+test:
+
+```php
+$fake->bind($client, retries: true);
+```
+
 ### Scripting answers
 
 `FakeAnswers` writes a response in answers rather than in JSON. Script what the
@@ -462,7 +472,19 @@ $fake->reply(
 | `score($name, $score, $confidence?, $probabilities?, $legend?)` | a score on the rubric |
 | `raw($name, $payload)` | an answer payload verbatim |
 | `omit($name)` | leaves a question unanswered, as a dropped answer would |
+| `only()` | answers only what is scripted, leaving the rest unanswered |
 | `model()`, `usage()`, `provider()`, `id()`, `with()` | the fields around the answers |
+
+Simulated answers are the right default for a test asserting on one answer
+among several. They are the wrong one for a test that asks the same question of
+a list — is each of these candidates the one being looked for — where the
+unscripted questions are the negatives the assertion depends on, and a
+simulated yes at `0.75` would make every candidate a match. `only()` scripts
+the whole answer instead:
+
+```php
+$fake->reply(FakeAnswers::make()->noul('c_billing', 0.91)->only());
+```
 
 Each `reply()` covers one call, in order; `alwaysReply()` covers every System
 One call the queue does not. Both also take a callback, which receives the call

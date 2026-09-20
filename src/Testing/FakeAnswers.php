@@ -20,7 +20,9 @@ use Phox\TypeSafe\TypeSafe;
  * Only the answers a test cares about need scripting: every other question the
  * call asked is answered by {@see SimulatedAnswer}, and gaps in a scripted
  * answer — a choice's probabilities, a score's legend — are filled in from the
- * question that was asked, the way the API would fill them.
+ * question that was asked, the way the API would fill them. Call {@see only()}
+ * where that is the wrong default and an unscripted question should come back
+ * unanswered instead.
  */
 final class FakeAnswers
 {
@@ -32,6 +34,8 @@ final class FakeAnswers
 
     /** @var list<string> */
     private array $omitted = [];
+
+    private bool $only = false;
 
     private ?string $model = null;
 
@@ -135,6 +139,23 @@ final class FakeAnswers
     /**
      * Leave a question unanswered, as the API does when it drops one.
      */
+    /**
+     * Answer only what this scripts, leaving every other question the call
+     * asked unanswered.
+     *
+     * The default suits a test asserting on one answer among several. It does
+     * not suit one asking the same question of a list — is each of these
+     * candidates the one being looked for — where the unscripted ones are the
+     * negatives the assertion depends on, and a simulated yes at
+     * {@see SimulatedAnswer::CONFIDENCE} would make every one of them a match.
+     */
+    public function only(bool $only = true): self
+    {
+        $this->only = $only;
+
+        return $this;
+    }
+
     public function omit(string $name): self
     {
         unset($this->answers[$name]);
@@ -200,9 +221,11 @@ final class FakeAnswers
                 continue;
             }
 
-            $answer = isset($this->answers[$name])
-                ? ($this->answers[$name])($question)
-                : SimulatedAnswer::forQuestion($question);
+            $answer = match (true) {
+                isset($this->answers[$name]) => ($this->answers[$name])($question),
+                $this->only => null,
+                default => SimulatedAnswer::forQuestion($question),
+            };
 
             if ($answer !== null) {
                 $answers[$name] = $answer;

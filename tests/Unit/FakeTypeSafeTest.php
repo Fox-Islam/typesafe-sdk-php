@@ -10,6 +10,7 @@ use Phox\TypeSafe\Exceptions\TimeoutException;
 use Phox\TypeSafe\Exceptions\TypeSafeException;
 use Phox\TypeSafe\Questions\Noul;
 use Phox\TypeSafe\Responses\SystemOneResponse;
+use Phox\TypeSafe\Retry\RetryPolicy;
 use Phox\TypeSafe\Testing\FakeAnswers;
 use Phox\TypeSafe\Testing\FakeTypeSafe;
 use Phox\TypeSafe\Testing\SimulatedAnswer;
@@ -36,6 +37,58 @@ final class FakeTypeSafeTest extends ClientTestCase
             ->noul('urgent', 'Is the customer blocked?')
             ->score('severity', ['Can wait', 'Today', 'Right now'])
             ->send();
+    }
+
+    #[Test]
+    public function only_leaves_every_unscripted_question_unanswered(): void
+    {
+        $this->fake->reply(FakeAnswers::make()->noul('urgent', 0.82)->only());
+
+        $answers = $this->ask();
+
+        self::assertSame(0.82, $answers->noul('urgent')->noul());
+        self::assertFalse($answers->has('category'));
+        self::assertFalse($answers->has('severity'));
+    }
+
+    #[Test]
+    public function only_can_be_turned_back_off(): void
+    {
+        $this->fake->reply(FakeAnswers::make()->noul('urgent', 0.82)->only()->only(false));
+
+        self::assertTrue($this->ask()->has('category'));
+    }
+
+    #[Test]
+    public function binding_a_client_takes_its_retries_off_so_a_queued_failure_is_one_call(): void
+    {
+        $this->fake->throw(new TimeoutException(2.0));
+        $this->fake->reply(FakeAnswers::make()->noul('urgent', 0.82));
+
+        $client = $this->fake->bind(Client::make('a-key'));
+
+        try {
+            $this->ask($client);
+            self::fail('The queued timeout should have surfaced.');
+        } catch (TimeoutException) {
+            // the failure itself, not a retry of it
+        }
+
+        self::assertSame(1, $this->fake->callCount());
+        self::assertSame(0.82, $this->ask($client)->noul('urgent')->noul());
+    }
+
+    #[Test]
+    public function binding_can_keep_the_clients_own_retry_policy(): void
+    {
+        $this->fake->fail(500);
+        $this->fake->reply(FakeAnswers::make()->noul('urgent', 0.82));
+
+        $client = $this->fake->bind(Client::make('a-key')->retry(RetryPolicy::default()), retries: true);
+
+        self::assertSame(0.82, $this->ask($client)->noul('urgent')->noul());
+        self::assertSame(2, $this->fake->callCount());
+        self::assertSame(1, $this->fake->lastCall()->retryCount());
     }
 
     #[Test]
