@@ -58,21 +58,31 @@ final class Choice extends Question
     /**
      * Add several labels, as a list of names or a map of name to description.
      *
-     * @param list<string>|array<string, Content> $options
+     * Which of the two is decided by the whole array, not by each key. PHP casts
+     * a numeric string key to an integer, so `['30' => 'Thirty days']` arrives
+     * with an integer key and reads as a list entry; taking the value as the
+     * label then ships the description as the option name and loses `30`.
+     * `array_is_list()` tells the two apart: a list runs 0, 1, 2 with nothing
+     * missing, and a map keyed `30` does not.
+     *
+     * @param list<string>|array<array-key, Content> $options
      */
     public function options(array $options): self
     {
-        foreach ($options as $label => $description) {
-            if (is_int($label)) {
-                if (! is_string($description)) {
+        if (array_is_list($options)) {
+            foreach ($options as $label) {
+                if (! is_string($label)) {
                     throw new TypeSafeException('Choice options given as a list must be label strings.');
                 }
 
-                $this->option($description);
-                continue;
+                $this->option($label);
             }
 
-            $this->option($label, $description);
+            return $this;
+        }
+
+        foreach ($options as $label => $description) {
+            $this->option((string) $label, $description);
         }
 
         return $this;
@@ -100,7 +110,10 @@ final class Choice extends Question
 
     protected function payload(): array
     {
-        return ['criteria' => $this->criteria];
+        // Always an object. A Choice keyed `0`, `1`, `2` is a PHP list once the
+        // numeric-string keys have been cast, and `json_encode` writes a list as
+        // a JSON array - which the endpoint reads as options with no labels.
+        return ['criteria' => (object) $this->criteria];
     }
 
     /**

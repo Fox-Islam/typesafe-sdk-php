@@ -15,6 +15,51 @@ use PHPUnit\Framework\TestCase;
 final class QuestionTest extends TestCase
 {
     #[Test]
+    public function a_choice_keeps_labels_that_look_like_numbers(): void
+    {
+        // PHP casts a numeric string key to an integer, so these arrive keyed
+        // 30 and 14 rather than "30" and "14".
+        $question = Choice::between(['30' => 'The policy allows thirty days.', '14' => 'Fourteen days.']);
+
+        self::assertSame(
+            ['30' => 'The policy allows thirty days.', '14' => 'Fourteen days.'],
+            $question->getOptions(),
+        );
+    }
+
+    #[Test]
+    public function a_choice_still_takes_a_plain_list_of_labels(): void
+    {
+        $question = Choice::between(['billing', 'technical']);
+
+        self::assertSame(['billing' => null, 'technical' => null], $question->getOptions());
+    }
+
+    #[Test]
+    public function a_choice_sends_its_options_as_an_object_even_when_the_labels_count_from_zero(): void
+    {
+        // Keyed 0, 1, 2 the criteria are a PHP list, and a list encodes as a
+        // JSON array, which is options with no labels.
+        $question = (new Choice())->option('0', 'None')->option('1', 'One')->option('2', 'Two');
+
+        self::assertSame(
+            '{"type":"choice","instructions":null,"criteria":{"0":"None","1":"One","2":"Two"}}',
+            (string) json_encode($question->toArray()),
+        );
+    }
+
+    #[Test]
+    public function a_score_sends_its_levels_as_an_ordered_list(): void
+    {
+        $question = (new Score())->levels(['Low', 'Medium', 'High']);
+
+        self::assertSame(
+            '{"type":"score","instructions":null,"criteria":["Low","Medium","High"]}',
+            (string) json_encode($question->toArray()),
+        );
+    }
+
+    #[Test]
     public function a_noul_question_sends_no_criteria_until_an_outcome_is_described(): void
     {
         $question = Noul::ask('Is this about billing?');
