@@ -306,4 +306,14 @@ final class SystemOneTest extends ClientTestCase
         self::assertInstanceOf(ChoiceAnswer::class, $answer);
         self::assertSame('mentions a double charge', $answer->toArray()['rationale']);
     }
+
+    #[Test]
+    public function it_sends_a_float_with_its_decimal_and_an_int_without(): void
+    {
+        $this->transport->queue($this->answersPayload());
+
+        $this->client()->systemOne()->state(['a' => 1.0, 'time' => 32])->noul('urgent', 'Is a on?')->send();
+
+        self::assertStringContainsString('"state":{"a":1.0,"time":32}', (string) $this->transport->lastRequest()->getBody());
+    }
 }

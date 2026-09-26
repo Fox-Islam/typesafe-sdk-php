@@ -9,7 +9,12 @@ use Phox\TypeSafe\Exceptions\TypeSafeException;
 
 final class Json
 {
-    private const int FLAGS = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR;
+    /**
+     * A float keeps its `.0`: PHP writes `1.0` as `1` without it, and Jev reads the two
+     * differently. Asked whether an odd number of (1, 1, 0.96) is above 0.5, it answered 0.50 to
+     * 0.58 with the ones sent as `1` and 0.55 to 0.66 as `1.0`.
+     */
+    private const int FLAGS = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR;
 
     private function __construct() {}
 
