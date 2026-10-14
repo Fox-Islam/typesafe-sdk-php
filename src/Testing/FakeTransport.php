@@ -108,15 +108,13 @@ final class FakeTransport implements Transport
     }
 
     /**
-     * The last request body, decoded.
+     * The last request body, decoded; for a multipart request, its JSON part.
      *
      * @return array<string, mixed>
      */
     public function lastBody(): array
     {
-        $body = json_decode((string) $this->lastRequest()->getBody(), true);
-
-        return is_array($body) ? $body : [];
+        return FakeCall::fromRequest($this->lastRequest(), 0, 0.0)->body();
     }
 
     public function callCount(): int

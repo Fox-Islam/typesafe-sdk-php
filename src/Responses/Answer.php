@@ -8,7 +8,7 @@ use Phox\TypeSafe\Exceptions\TypeSafeException;
 
 /**
  * One question's answer. The concrete class mirrors the question that produced
- * it: {@see NoulAnswer}, {@see ChoiceAnswer}, {@see ScoreAnswer}.
+ * it: {@see NoulAnswer}, {@see ChoiceAnswer}, {@see ScoreAnswer}, {@see BoxAnswer}.
  */
 abstract class Answer
 {
@@ -42,6 +42,7 @@ abstract class Answer
             'noul' => new NoulAnswer($data),
             'choice' => new ChoiceAnswer($data),
             'score' => new ScoreAnswer($data),
+            'box' => new BoxAnswer($data),
             default => null,
         };
     }

@@ -77,6 +77,18 @@ enum Provider: string
     }
 
     /**
+     * Whether the provider takes images and box questions.
+     *
+     * OpenRouter's decisions endpoint rejects a multipart body and a box
+     * question, and silently drops base64 assets: the answers and token counts
+     * match a request sent without them (checked 2026-10-14).
+     */
+    public function acceptsImages(): bool
+    {
+        return $this === self::TypeSafe;
+    }
+
+    /**
      * @throws TypeSafeException The value does not name a provider.
      */
     public static function parse(string $value, string $source): self

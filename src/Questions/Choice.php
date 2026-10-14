@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phox\TypeSafe\Questions;
 
+use Phox\TypeSafe\Assets\Image;
 use Phox\TypeSafe\Exceptions\TypeSafeException;
 
 /**
@@ -28,7 +29,7 @@ final class Choice extends Question
     /**
      * @param Content $instructions
      */
-    public static function ask(string|array|null $instructions = null): self
+    public static function ask(string|array|Image|null $instructions = null): self
     {
         return (new self())->instructions($instructions);
     }
@@ -48,7 +49,7 @@ final class Choice extends Question
      *
      * @param Content $description
      */
-    public function option(string $label, string|array|null $description = null): self
+    public function option(string $label, string|array|Image|null $description = null): self
     {
         $this->criteria[$label] = $description;
 

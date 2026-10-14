@@ -10,7 +10,7 @@ use Phox\TypeSafe\Exceptions\TypeSafeException;
  * Answers keyed by question name, with the model that produced them and the
  * tokens they cost.
  *
- * The typed accessors — {@see noul()}, {@see choice()}, {@see score()} — assert
+ * The typed accessors — {@see noul()}, {@see choice()}, {@see score()}, {@see box()} — assert
  * that an answer came back in the shape the question asked for, so a mismatch
  * surfaces here rather than as a missing method further down.
  */
@@ -144,6 +144,14 @@ final class SystemOneResponse
     }
 
     /**
+     * @throws TypeSafeException The answer is missing or is not a box answer.
+     */
+    public function box(string $name): BoxAnswer
+    {
+        return $this->expect($name, BoxAnswer::class);
+    }
+
+    /**
      * @return array<string, NoulAnswer>
      */
     public function nouls(): array
@@ -168,6 +176,15 @@ final class SystemOneResponse
     {
         /** @var array<string, ScoreAnswer> */
         return array_filter($this->answers, static fn (Answer $answer): bool => $answer instanceof ScoreAnswer);
+    }
+
+    /**
+     * @return array<string, BoxAnswer>
+     */
+    public function boxes(): array
+    {
+        /** @var array<string, BoxAnswer> */
+        return array_filter($this->answers, static fn (Answer $answer): bool => $answer instanceof BoxAnswer);
     }
 
     /**
@@ -197,6 +214,7 @@ final class SystemOneResponse
                 match ($expected) {
                     NoulAnswer::class => 'noul',
                     ChoiceAnswer::class => 'choice',
+                    BoxAnswer::class => 'box',
                     default => 'score',
                 },
             ));

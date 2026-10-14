@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phox\TypeSafe\Http;
 
 use GuzzleHttp\Psr7\Request;
+use Phox\TypeSafe\Assets\Image;
 use Phox\TypeSafe\Config;
 use Phox\TypeSafe\Enums\LogLevel;
 use Phox\TypeSafe\Exceptions\ApiException;
@@ -13,6 +14,7 @@ use Phox\TypeSafe\Exceptions\TimeoutException;
 use Phox\TypeSafe\Retry\RetryPolicy;
 use Phox\TypeSafe\Support\Headers;
 use Phox\TypeSafe\Support\Json;
+use Phox\TypeSafe\Support\Multipart;
 use Phox\TypeSafe\Support\Runtime;
 use Phox\TypeSafe\TypeSafe;
 
@@ -45,17 +47,28 @@ final class Requester
 
     /**
      * @param array<string, mixed>|null $body
+     * @param array<string, Image> $files Uploaded after the body as multipart parts, by part name.
      *
      * @throws ApiException The API returned a non-2xx response the policy would not retry.
      * @throws TimeoutException An attempt ran out of time and retries are exhausted or disabled.
      * @throws ConnectionException The request never completed and retries are exhausted or disabled.
      */
-    public function send(string $method, string $path, ?array $body, RequestOptions $options): ApiResponse
+    public function send(string $method, string $path, ?array $body, RequestOptions $options, array $files = []): ApiResponse
     {
         $url = $this->config->getBaseUrl() . $path;
         $timeout = $options->timeout ?? $this->config->getTimeout();
         $policy = $options->retry ?? $this->config->getRetry();
         $payload = $body === null ? null : Json::encode($body);
+        $contentType = $payload === null ? null : 'application/json';
+
+        if ($files !== [] && $payload !== null) {
+            $parts = [['name' => 'request', 'contentType' => 'application/json', 'content' => $payload]];
+            foreach ($files as $name => $image) {
+                $parts[] = ['name' => $name, 'contentType' => $image->contentType(), 'content' => $image->bytes()];
+            }
+
+            ['contentType' => $contentType, 'body' => $payload] = Multipart::encode($parts);
+        }
 
         // Caller headers go first so they cannot displace auth or the content type.
         $headers = Headers::merge($this->config->getDefaultHeaders(), $options->headers, [
@@ -64,7 +77,7 @@ final class Requester
             'User-Agent' => $this->agent(),
             TypeSafe::SDK_HEADER => $this->agent(),
             TypeSafe::RUNTIME_HEADER => Runtime::describe(),
-            'Content-Type' => $payload === null ? null : 'application/json',
+            'Content-Type' => $contentType,
             TypeSafe::RETRY_COUNT_HEADER => null,
         ]);
 

@@ -9,7 +9,7 @@ namespace Phox\TypeSafe\Testing;
  * always comes back in the shape the SDK expects.
  *
  * Nothing here is random: the simulator takes the first thing the question
- * offered — a yes, the first label, level zero — and puts
+ * offered — a yes, the first label, level zero, the whole image — and puts
  * {@see SimulatedAnswer::CONFIDENCE} on it, spreading what is left evenly over
  * the rest. Run the same test twice and you get the same answers.
  */
@@ -17,6 +17,9 @@ final class SimulatedAnswer
 {
     /** The probability the simulator puts on the outcome it picks. */
     public const float CONFIDENCE = 0.75;
+
+    /** The box the simulator answers a box question with. */
+    public const array WHOLE_IMAGE = ['top' => 0.0, 'bottom' => 1.0, 'left' => 0.0, 'right' => 1.0];
 
     private function __construct() {}
 
@@ -33,6 +36,7 @@ final class SimulatedAnswer
             'noul' => ['type' => 'noul', 'noul' => self::CONFIDENCE],
             'choice' => self::choice($question),
             'score' => self::score($question),
+            'box' => ['type' => 'box', 'box' => self::WHOLE_IMAGE, 'confidence' => self::CONFIDENCE],
             default => null,
         };
     }

@@ -39,6 +39,12 @@ final class TypeSafe
     public const string RETRY_AFTER_HEADER = 'retry-after';
     public const string RETRY_AFTER_MS_HEADER = 'retry-after-ms';
 
+    /**
+     * Opts a request into images and box questions, an experimental API
+     * feature whose format and limits may change. Send it as `true`.
+     */
+    public const string IMAGES_HEADER = 'TypeSafe-Danger-Zone-Images';
+
     /** Longest raw response body echoed into an API error message. */
     public const int MAX_ERROR_BODY_LENGTH = 200;
 

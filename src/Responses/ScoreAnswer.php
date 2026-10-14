@@ -8,8 +8,6 @@ namespace Phox\TypeSafe\Responses;
  * An expected score with the rubric it was drawn from.
  *
  * @see https://docs.typesafe.ai/primitives/score
- *
- * @phpstan-import-type Content from \Phox\TypeSafe\Questions\Question
  */
 final class ScoreAnswer extends Answer
 {
@@ -41,7 +39,7 @@ final class ScoreAnswer extends Answer
     /**
      * Rubric descriptions keyed by integer score.
      *
-     * @return array<int, Content>
+     * @return array<int, string|array<array-key, mixed>|null>
      */
     public function legend(): array
     {
@@ -62,7 +60,7 @@ final class ScoreAnswer extends Answer
     /**
      * The rubric description for one level, or for the nearest level by default.
      *
-     * @return Content
+     * @return string|array<array-key, mixed>|null
      */
     public function describe(?int $level = null): string|array|null
     {

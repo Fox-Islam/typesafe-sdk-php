@@ -6,6 +6,7 @@ namespace Phox\TypeSafe\Testing;
 
 use Phox\TypeSafe\Support\Headers;
 use Phox\TypeSafe\Support\Json;
+use Phox\TypeSafe\Support\Multipart;
 use Phox\TypeSafe\TypeSafe;
 use Psr\Http\Message\RequestInterface;
 
@@ -25,6 +26,7 @@ final class FakeCall
     /**
      * @param array<string, mixed> $body
      * @param array<string, string> $headers
+     * @param array<string, string> $parts
      */
     private function __construct(
         private readonly int $number,
@@ -32,11 +34,14 @@ final class FakeCall
         private readonly float $timeout,
         private readonly array $body,
         private readonly array $headers,
+        private readonly array $parts,
     ) {}
 
     public static function fromRequest(RequestInterface $request, int $number, float $timeout): self
     {
-        $body = Json::decode((string) $request->getBody());
+        $raw = (string) $request->getBody();
+        $parts = Multipart::decode($request->getHeaderLine('Content-Type'), $raw) ?? [];
+        $body = Json::decode($parts['request'] ?? $raw);
 
         return new self(
             $number,
@@ -44,6 +49,7 @@ final class FakeCall
             $timeout,
             is_array($body) ? $body : [],
             Headers::flatten($request->getHeaders()),
+            $parts,
         );
     }
 
@@ -168,7 +174,34 @@ final class FakeCall
         return $this->question($name) !== null;
     }
 
-    /** The question type sent under a name: `noul`, `choice`, `score`, or `null`. */
+    /**
+     * The image files uploaded with the call, keyed by the reference they were
+     * sent under: `<image:…>` for an image placed in the request, or the name
+     * given to {@see \Phox\TypeSafe\Requests\SystemOne::asset()}.
+     *
+     * @return array<string, string>
+     */
+    public function images(): array
+    {
+        $assets = $this->body['assets'] ?? null;
+
+        if (! is_array($assets)) {
+            return [];
+        }
+
+        $images = [];
+        foreach ($assets as $reference => $asset) {
+            $part = is_array($asset) && is_string($asset['part'] ?? null) ? $asset['part'] : null;
+
+            if ($part !== null && isset($this->parts[$part])) {
+                $images[(string) $reference] = $this->parts[$part];
+            }
+        }
+
+        return $images;
+    }
+
+    /** The question type sent under a name: `noul`, `choice`, `score`, `box`, or `null`. */
     public function questionType(string $name): ?string
     {
         $type = $this->question($name)['type'] ?? null;

@@ -126,6 +126,22 @@ final class FakeAnswers
     }
 
     /**
+     * A located box, with each edge a fraction of the image from zero to one.
+     */
+    public function box(
+        string $name,
+        float $top,
+        float $left,
+        float $bottom,
+        float $right,
+        ?float $confidence = SimulatedAnswer::CONFIDENCE,
+    ): self {
+        $box = ['top' => $top, 'bottom' => $bottom, 'left' => $left, 'right' => $right];
+
+        return $this->put($name, static fn (?array $question): array => ['type' => 'box', 'box' => $box, 'confidence' => $confidence]);
+    }
+
+    /**
      * An answer payload exactly as the API would send it, for shapes the
      * helpers above do not cover.
      *

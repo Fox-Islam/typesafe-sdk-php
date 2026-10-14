@@ -54,6 +54,7 @@ or set `TYPESAFE_PROVIDER=openrouter` and construct the client normally.
 | Request id | `x-typesafe-request-id` | `x-generation-id`, also in the body |
 | Per-call cost | not reported | `$response->usage()->cost()` |
 | `models()->list()` | yes | no catalogue — name the model directly |
+| Images and box questions | yes | no; refused before sending |
 
 `baseUrl` and `apiKey` follow the provider when you switch, unless you set
 either of them yourself, in which case yours is kept:
@@ -206,6 +207,95 @@ $answer->describe();       // 'Should be handled today'
 $answer->probabilities();  // [0 => 0.1, 1 => 0.4, 2 => 0.5]
 ```
 
+### Box — where something is in an image
+
+Locates what the instructions describe in the request's image. It needs an
+image in the request (see [Images](#images)) and Jev 1.14 or newer, such as
+`jev-preview`. An older build answers a box question with a bare
+`400 Invalid request.`; on 2026-10-14 `jev-latest` resolved to 1.13.
+
+```php
+use Phox\TypeSafe\Assets\Image;
+use Phox\TypeSafe\Questions\Box;
+use Phox\TypeSafe\TypeSafe;
+
+$response = $client->systemOne()
+    ->header(TypeSafe::IMAGES_HEADER, 'true')
+    ->model('jev-preview')
+    ->state(Image::fromPath('photo.jpg'))
+    ->ask('dog', Box::locate('The dog'))   // or ->box('dog', 'The dog')
+    ->send();
+```
+
+```php
+$answer = $response->box('dog');
+$answer->box();              // ['top' => 0.1, 'bottom' => 0.6, 'left' => 0.25, 'right' => 0.75]
+$answer->top();              // fractions of the image's height and width, from its top-left
+$answer->inPixels(800, 400); // [200, 40, 400, 200]: x, y, width, height
+$answer->confidence();       // 0.88, or null when the API did not report one
+```
+
+## Images
+
+Images are experimental on the API: off unless the request sends the
+`TypeSafe-Danger-Zone-Images: true` header, and the format, answers and limits
+may change. The SDK does not send the header for you; set it on the client, or
+per call:
+
+```php
+use Phox\TypeSafe\TypeSafe;
+
+$client->header(TypeSafe::IMAGES_HEADER, 'true');
+```
+
+An `Image` goes anywhere text can - the state, instructions, a choice option, a
+score level, a noul outcome - on its own, nested in an array, or interpolated
+into a string:
+
+```php
+use Phox\TypeSafe\Assets\Image;
+
+$photo = Image::fromPath('returns/RMA-1042.jpg');   // or fromBytes(), fromBase64()
+
+$client->systemOne()
+    ->state(['claim' => 'The mug arrived chipped.', 'photo' => $photo])
+    ->noul('damaged', "Is the product in {$photo} damaged?")
+    ->send();
+```
+
+Each image is written as a reference, `<image:…>`, and uploaded once alongside
+the JSON as `multipart/form-data`. The model receives a copy of the image every
+time a reference appears, and each copy is billed as input tokens.
+
+An image interpolated into a string is found again through that reference, so
+it must be alive when the call is sent: `'See ' . Image::fromPath($p)` frees the
+image straight away, and `send()` throws instead of sending a reference with
+nothing behind it. Keep it in a variable.
+
+To refer to an image by a name of your own, such as in a prompt kept in config,
+attach it under that name:
+
+```php
+$client->systemOne()
+    ->state('A customer returned <delivered>. The catalog photo is <catalog>.')
+    ->noul('matches', 'Is <delivered> the product shown in <catalog>?')
+    ->asset('<delivered>', Image::fromPath($returned))
+    ->asset('<catalog>', Image::fromPath($catalog))
+    ->send();
+```
+
+Every occurrence of the name is replaced, so pick one that cannot occur in
+ordinary text. A name that appears nowhere in the request throws before sending.
+
+The API takes PNG or JPEG stills, 256 to 1568 px on each side and at most 16 MiB
+each, and rejects anything outside that instead of resizing it. It ignores EXIF
+orientation, so rotate the pixels upright first. The API checks these limits,
+not the SDK; see [the image docs](https://docs.typesafe.ai/images).
+
+Only TypeSafe's own endpoint takes images. OpenRouter rejects the upload and
+silently drops images sent as base64, so on that provider `send()` throws before
+anything goes out.
+
 ## Asking several questions at once
 
 ```php
@@ -229,10 +319,10 @@ $response->usage()->totalTokens();
 $response->requestId();              // for support tickets about a request
 ```
 
-`choice()`, `noul()` and `score()` check that an answer came back in the shape
-its question asked for, so a mismatch is reported here rather than surfacing as
-a missing method later. `answers()` returns all of them; `nouls()`, `choices()`
-and `scores()` return each kind.
+`choice()`, `noul()`, `score()` and `box()` check that an answer came back in
+the shape its question asked for, so a mismatch is reported here instead of
+surfacing as a missing method later. `answers()` returns all of them; `nouls()`,
+`choices()`, `scores()` and `boxes()` return each kind.
 
 The shorthands on the request builder cover the common case without importing a
 question class:
@@ -426,9 +516,10 @@ self::assertSame('I was charged twice.', $fake->lastCall()->state());
 
 Nothing has to be scripted. The fake reads the questions off the request and
 answers every one of them in the shape that question asked for, identically on
-every run: a yes at `0.75`, the first label, level `0`, with the rest of the
-probability split evenly over the other outcomes. A score answer comes back with
-the rubric it was asked about as its legend, as the API sends it.
+every run: a yes at `0.75`, the first label, level `0`, a box around the whole
+image, with the rest of the probability split evenly over the other outcomes. A
+score answer comes back with the rubric it was asked about as its legend, as the
+API sends it.
 
 `$fake->client()` is a client built for this — no API key, no network, and
 retries off, so a failure you queue surfaces as itself. To fake the client an
@@ -470,6 +561,7 @@ $fake->reply(
 | `noul($name, 0.82\|true\|false)` | a yes/no answer |
 | `choice($name, $label, $probabilities?, $confidence?)` | the selected label |
 | `score($name, $score, $confidence?, $probabilities?, $legend?)` | a score on the rubric |
+| `box($name, $top, $left, $bottom, $right, $confidence?)` | a located box |
 | `raw($name, $payload)` | an answer payload verbatim |
 | `omit($name)` | leaves a question unanswered, as a dropped answer would |
 | `only()` | answers only what is scripted, leaving the rest unanswered |
@@ -521,6 +613,7 @@ terms of questions rather than JSON.
 | --- | --- |
 | `state()`, `model()` | what the call was about, and the model it resolved to |
 | `questions()`, `question($name)`, `questionType($name)`, `asked($name)` | the questions as sent |
+| `images()` | the image files uploaded, keyed by the reference they were sent under |
 | `method()`, `url()`, `path()`, `headers()`, `header($name)` | the request itself |
 | `retryCount()`, `timeout()` | which attempt this was, and what it was allowed |
 | `body()`, `request()` | the raw payload and the PSR-7 request |

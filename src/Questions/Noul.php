@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Phox\TypeSafe\Questions;
 
+use Phox\TypeSafe\Assets\Image;
+
 /**
  * A yes/no question, answered with the probability of yes.
  *
@@ -20,17 +22,17 @@ namespace Phox\TypeSafe\Questions;
 final class Noul extends Question
 {
     /** @var Content */
-    private string|array|null $yes = null;
+    private string|array|Image|null $yes = null;
 
     /** @var Content */
-    private string|array|null $no = null;
+    private string|array|Image|null $no = null;
 
     private bool $described = false;
 
     /**
      * @param Content $instructions
      */
-    public static function ask(string|array|null $instructions = null): self
+    public static function ask(string|array|Image|null $instructions = null): self
     {
         return (new self())->instructions($instructions);
     }
@@ -40,7 +42,7 @@ final class Noul extends Question
      *
      * @param Content $description
      */
-    public function yes(string|array|null $description): self
+    public function yes(string|array|Image|null $description): self
     {
         $this->yes = $description;
         $this->described = true;
@@ -53,7 +55,7 @@ final class Noul extends Question
      *
      * @param Content $description
      */
-    public function no(string|array|null $description): self
+    public function no(string|array|Image|null $description): self
     {
         $this->no = $description;
         $this->described = true;
