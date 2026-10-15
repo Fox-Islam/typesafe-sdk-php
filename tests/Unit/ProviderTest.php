@@ -14,8 +14,8 @@ use PHPUnit\Framework\Attributes\Test;
 final class ProviderTest extends ClientTestCase
 {
     /**
-     * The decisions endpoint answers in the same shape as `/v1/systemone`, plus
-     * a generation id, a provider name and a price.
+     * OpenRouter's System One endpoint answers in the same shape as TypeSafe's,
+     * plus a generation id, a provider name and a price.
      *
      * @return array<string, mixed>
      */
@@ -49,7 +49,7 @@ final class ProviderTest extends ClientTestCase
 
         self::assertSame('https://openrouter.ai', $client->getBaseUrl());
         self::assertSame(
-            'https://openrouter.ai/api/alpha/decisions',
+            'https://openrouter.ai/api/v1/systemone',
             (string) $this->transport->lastRequest()->getUri(),
         );
     }

@@ -10,7 +10,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Where System One calls are sent: "typesafe" to call TypeSafe directly, or
-    | "openrouter" to reach Jev through OpenRouter's decisions endpoint. The
+    | "openrouter" to reach Jev through OpenRouter's System One endpoint. The
     | request and answer bodies are the same on both, so this only decides the
     | host, the path and which key below is used.
     |

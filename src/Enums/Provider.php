@@ -12,7 +12,7 @@ use Phox\TypeSafe\TypeSafe;
  * Where System One calls are sent.
  *
  * Jev is reachable two ways: directly from TypeSafe, and through OpenRouter's
- * decisions endpoint. The request and answer bodies are the same on both — the
+ * System One endpoint. The request and answer bodies are the same on both - the
  * provider only decides the host, the path, which key is read, and which header
  * carries the request id. Everything a caller writes stays identical, model names
  * included: OpenRouter accepts the bare `jev-latest` and resolves it to the same
@@ -42,7 +42,7 @@ enum Provider: string
     {
         return match ($this) {
             self::TypeSafe => TypeSafe::SYSTEM_ONE_PATH,
-            self::OpenRouter => TypeSafe::OPENROUTER_DECISIONS_PATH,
+            self::OpenRouter => TypeSafe::OPENROUTER_SYSTEM_ONE_PATH,
         };
     }
 
@@ -67,9 +67,9 @@ enum Provider: string
     /**
      * Whether the provider can list models.
      *
-     * OpenRouter's decisions endpoint has no catalogue of its own, and Jev is
+     * OpenRouter's System One endpoint has no catalogue of its own, and Jev is
      * not in the `/api/v1/models` listing that covers its chat models, so there
-     * is nothing to call rather than something that returns an empty list.
+     * is nothing to call instead of something that returns an empty list.
      */
     public function listsModels(): bool
     {
@@ -79,9 +79,10 @@ enum Provider: string
     /**
      * Whether the provider takes images and box questions.
      *
-     * OpenRouter's decisions endpoint rejects a multipart body and a box
-     * question, and silently drops base64 assets: the answers and token counts
-     * match a request sent without them (checked 2026-10-14).
+     * OpenRouter's request schema has no assets field. Its System One endpoint
+     * rejects a multipart body (400 invalid content-type) and silently drops
+     * base64 assets: the answers and token counts match a request sent without
+     * them, and a box question is answered as if no image were sent.
      */
     public function acceptsImages(): bool
     {

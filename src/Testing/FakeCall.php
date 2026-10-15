@@ -77,7 +77,7 @@ final class FakeCall
     /** Whether this is a System One call, on either provider's path. */
     public function isSystemOne(): bool
     {
-        return in_array($this->path(), [TypeSafe::SYSTEM_ONE_PATH, TypeSafe::OPENROUTER_DECISIONS_PATH], true);
+        return in_array($this->path(), [TypeSafe::SYSTEM_ONE_PATH, TypeSafe::OPENROUTER_SYSTEM_ONE_PATH], true);
     }
 
     public function isModelList(): bool

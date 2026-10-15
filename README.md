@@ -36,7 +36,7 @@ echo $response->choice('category')->confidence();  // 0.91
 
 ## Providers
 
-Jev is served both by TypeSafe directly and by OpenRouter's decisions endpoint.
+Jev is served both by TypeSafe directly and by OpenRouter's System One endpoint.
 The request and answer bodies are the same on both, so the provider only decides
 the host, the path and which key is read:
 
@@ -49,7 +49,7 @@ or set `TYPESAFE_PROVIDER=openrouter` and construct the client normally.
 | | TypeSafe | OpenRouter |
 | --- | --- | --- |
 | Host | `https://api.typesafe.ai` | `https://openrouter.ai` |
-| Path | `/v1/systemone` | `/api/alpha/decisions` |
+| Path | `/v1/systemone` | `/api/v1/systemone` |
 | Key | `TYPESAFE_API_KEY` | `OPENROUTER_API_KEY` |
 | Request id | `x-typesafe-request-id` | `x-generation-id`, also in the body |
 | Per-call cost | not reported | `$response->usage()->cost()` |

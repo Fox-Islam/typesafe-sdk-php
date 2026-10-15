@@ -29,7 +29,10 @@ final class TypeSafe
 
     public const string SYSTEM_ONE_PATH = '/v1/systemone';
     public const string MODELS_PATH = '/v1/models';
-    public const string OPENROUTER_DECISIONS_PATH = '/api/alpha/decisions';
+    public const string OPENROUTER_SYSTEM_ONE_PATH = '/api/v1/systemone';
+
+    /** @deprecated Holds the same path as OPENROUTER_SYSTEM_ONE_PATH; use that. */
+    public const string OPENROUTER_DECISIONS_PATH = self::OPENROUTER_SYSTEM_ONE_PATH;
 
     public const string SDK_HEADER = 'X-TypeSafe-SDK';
     public const string RUNTIME_HEADER = 'X-TypeSafe-Runtime';
