@@ -25,8 +25,9 @@ use Stringable;
  * ```
  *
  * The API reads the format from the bytes and rejects anything other than PNG
- * or JPEG. A request with images needs the
- * {@see \Phox\TypeSafe\TypeSafe::IMAGES_HEADER} header.
+ * or JPEG. A request to TypeSafe with images needs the
+ * {@see \Phox\TypeSafe\TypeSafe::IMAGES_HEADER} header. On OpenRouter the image
+ * is written inline as a base64 data URI, not uploaded.
  *
  * @see https://docs.typesafe.ai/images
  */
@@ -137,6 +138,12 @@ final class Image implements JsonSerializable, Stringable
             str_starts_with($this->bytes, "\xFF\xD8\xFF") => 'image/jpeg',
             default => 'application/octet-stream',
         };
+    }
+
+    /** The image as a base64 `data:` URI, as OpenRouter takes it. */
+    public function dataUri(): string
+    {
+        return 'data:' . $this->contentType() . ';base64,' . base64_encode($this->bytes);
     }
 
     public function size(): int

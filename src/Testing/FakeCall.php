@@ -175,18 +175,19 @@ final class FakeCall
     }
 
     /**
-     * The image files uploaded with the call, keyed by the reference they were
+     * The image files sent with the call, keyed by the reference they were
      * sent under: `<image:…>` for an image placed in the request, or the name
-     * given to {@see \Phox\TypeSafe\Requests\SystemOne::asset()}.
+     * given to {@see \Phox\TypeSafe\Requests\SystemOne::asset()}. On OpenRouter,
+     * where images go inline with no reference, keyed by order of appearance.
      *
-     * @return array<string, string>
+     * @return array<array-key, string>
      */
     public function images(): array
     {
         $assets = $this->body['assets'] ?? null;
 
         if (! is_array($assets)) {
-            return [];
+            return self::inlined($this->body);
         }
 
         $images = [];
@@ -199,6 +200,25 @@ final class FakeCall
         }
 
         return $images;
+    }
+
+    /**
+     * The bytes of every `image_url` part carrying a base64 data URI, in order.
+     *
+     * @return list<string>
+     */
+    private static function inlined(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $url = ($value['type'] ?? null) === 'image_url' && is_array($value['image_url'] ?? null) ? $value['image_url']['url'] ?? null : null;
+        if (is_string($url) && preg_match('/^data:[^;,]+;base64,(.*)$/s', $url, $match) === 1) {
+            return [(string) base64_decode($match[1], true)];
+        }
+
+        return array_merge(...array_map(self::inlined(...), array_values($value)));
     }
 
     /** The question type sent under a name: `noul`, `choice`, `score`, `box`, or `null`. */

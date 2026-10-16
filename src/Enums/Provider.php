@@ -12,11 +12,12 @@ use Phox\TypeSafe\TypeSafe;
  * Where System One calls are sent.
  *
  * Jev is reachable two ways: directly from TypeSafe, and through OpenRouter's
- * System One endpoint. The request and answer bodies are the same on both - the
- * provider only decides the host, the path, which key is read, and which header
- * carries the request id. Everything a caller writes stays identical, model names
- * included: OpenRouter accepts the bare `jev-latest` and resolves it to the same
- * build TypeSafe does.
+ * System One endpoint. The answer bodies are the same on both, and so are the
+ * request bodies apart from images - the provider decides the host, the path,
+ * which key is read, which header carries the request id, and how images are
+ * sent. Everything a caller writes stays identical, model names included:
+ * OpenRouter accepts the bare `jev-latest` and resolves it to the same build
+ * TypeSafe does.
  *
  * ```php
  * Client::make()->openRouter()->systemOne()->state($ticket)->noul('urgent')->send();
@@ -77,16 +78,28 @@ enum Provider: string
     }
 
     /**
-     * Whether the provider takes images and box questions.
+     * Whether the provider takes images and box questions. Both providers do.
      *
-     * OpenRouter's request schema has no assets field. Its System One endpoint
-     * rejects a multipart body (400 invalid content-type) and silently drops
-     * base64 assets: the answers and token counts match a request sent without
-     * them, and a box question is answered as if no image were sent.
+     * @deprecated Always true. Use {@see inlinesImages()} for how images are sent.
      */
     public function acceptsImages(): bool
     {
-        return $this === self::TypeSafe;
+        return true;
+    }
+
+    /**
+     * Whether images are written into the JSON as `image_url` parts instead of
+     * uploaded alongside it.
+     *
+     * OpenRouter rejects a multipart body (400 invalid content-type) and silently
+     * drops an `assets` field. It reads an image only as a part carrying a base64
+     * data URI, placed where the image goes.
+     *
+     * @see https://openrouter.ai/docs/guides/community/multimodal-decisions
+     */
+    public function inlinesImages(): bool
+    {
+        return $this === self::OpenRouter;
     }
 
     /**

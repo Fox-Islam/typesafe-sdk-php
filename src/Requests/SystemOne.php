@@ -6,6 +6,7 @@ namespace Phox\TypeSafe\Requests;
 
 use Phox\TypeSafe\Assets\Image;
 use Phox\TypeSafe\Config;
+use Phox\TypeSafe\Exceptions\BadRequestException;
 use Phox\TypeSafe\Exceptions\TypeSafeException;
 use Phox\TypeSafe\Http\Requester;
 use Phox\TypeSafe\Http\RequestOptions;
@@ -223,9 +224,10 @@ final class SystemOne
      * The request body as it will be sent, with the model resolved.
      *
      * Choice criteria appear as objects rather than arrays, so that a map of
-     * labels never encodes as a JSON list. Images appear as themselves and
-     * encode as their references; `assets` maps each reference to the
-     * multipart part its file is uploaded in.
+     * labels never encodes as a JSON list. Calling TypeSafe, images appear as
+     * themselves and encode as their references, and `assets` maps each
+     * reference to the multipart part its file is uploaded in. On OpenRouter
+     * each image is an `image_url` part where it goes, with no `assets`.
      *
      * @return array<string, mixed>
      *
@@ -246,15 +248,45 @@ final class SystemOne
     public function send(): SystemOneResponse
     {
         $request = $this->build();
-        $response = $this->requester->send(
-            'POST',
-            $this->config->getProvider()->systemOnePath(),
-            $request['body'],
-            new RequestOptions($this->timeout, $this->headers, $this->retry),
-            $request['files'],
-        );
+
+        try {
+            $response = $this->requester->send(
+                'POST',
+                $this->config->getProvider()->systemOnePath(),
+                $request['body'],
+                new RequestOptions($this->timeout, $this->headers, $this->retry),
+                $request['files'],
+            );
+        } catch (BadRequestException $exception) {
+            throw $this->explainBox($exception, $request['body']['model']);
+        }
 
         return SystemOneResponse::fromArray($response->data(), $response->requestId());
+    }
+
+    /**
+     * Jev 1.13 answers a box question with a bare `Invalid request.`, which
+     * OpenRouter wraps in its own message. Other image errors name their
+     * cause, such as `Invalid image dimensions.`, and pass through unchanged.
+     */
+    private function explainBox(BadRequestException $exception, mixed $model): BadRequestException
+    {
+        $boxes = array_filter($this->questions, static fn (Question $question): bool => $question instanceof Box);
+
+        if ($boxes === [] || ! str_contains($exception->getMessage(), 'Invalid request.')) {
+            return $exception;
+        }
+
+        return new BadRequestException(
+            $exception->getStatus(),
+            $exception->getBody(),
+            $exception->getHeaders(),
+            sprintf(
+                '%s Box questions need Jev 1.14 or newer; "%s" may resolve to an older build.',
+                $exception->getMessage(),
+                is_string($model) ? $model : '',
+            ),
+        );
     }
 
     /**
@@ -275,19 +307,13 @@ final class SystemOne
         ] + $this->extra;
 
         $images = $this->images(Json::encode($body));
-        $provider = $this->config->getProvider();
-        $boxes = array_keys(array_filter($this->questions, static fn (Question $question): bool => $question instanceof Box));
-
-        if (! $provider->acceptsImages() && ($images !== [] || $boxes !== [])) {
-            throw new TypeSafeException(sprintf(
-                'The %s provider does not take %s; call TypeSafe directly for this request.',
-                $provider->value,
-                $images !== [] ? 'images' : 'box questions',
-            ));
-        }
 
         if ($images === []) {
             return ['body' => $body, 'files' => []];
+        }
+
+        if ($this->config->getProvider()->inlinesImages()) {
+            return ['body' => self::inline($body, $images), 'files' => []];
         }
 
         // The API rejects a part shared by two references with `400 Invalid
@@ -300,6 +326,55 @@ final class SystemOne
         }
 
         return ['body' => $body + ['assets' => $assets], 'files' => $files];
+    }
+
+    /**
+     * The body with every image written as an `image_url` part where it goes.
+     * A string naming only an image becomes its part; a string with text
+     * around one becomes a list of the text and the parts, in order.
+     *
+     * @param array<string, Image> $images By the reference each is written as.
+     */
+    private static function inline(mixed $value, array $images): mixed
+    {
+        return match (true) {
+            $value instanceof Image => self::part($value),
+            is_string($value) => self::split($value, $images),
+            is_array($value) => array_map(static fn (mixed $item): mixed => self::inline($item, $images), $value),
+            $value instanceof \stdClass => (object) self::inline(get_object_vars($value), $images),
+            $value instanceof \JsonSerializable => self::inline($value->jsonSerialize(), $images),
+            default => $value,
+        };
+    }
+
+    /**
+     * @param array<string, Image> $images
+     *
+     * @return string|array<string, mixed>|list<string|array<string, mixed>>
+     */
+    private static function split(string $text, array $images): string|array
+    {
+        $references = array_keys($images);
+        // Longest first, so a name that starts another name never splits it.
+        usort($references, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        $pattern = '/(' . implode('|', array_map(static fn (string $reference): string => preg_quote($reference, '/'), $references)) . ')/';
+
+        $pieces = preg_split($pattern, $text, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY) ?: [];
+        if (! array_intersect($pieces, $references)) {
+            return $text;
+        }
+
+        $content = array_map(static fn (string $piece): string|array => isset($images[$piece]) ? self::part($images[$piece]) : $piece, $pieces);
+
+        return count($content) === 1 ? $content[0] : $content;
+    }
+
+    /**
+     * @return array{type: 'image_url', image_url: array{url: string}}
+     */
+    private static function part(Image $image): array
+    {
+        return ['type' => 'image_url', 'image_url' => ['url' => $image->dataUri()]];
     }
 
     /**

@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Phox\TypeSafe\Tests\Unit;
 
 use Phox\TypeSafe\Assets\Image;
+use Phox\TypeSafe\Exceptions\BadRequestException;
 use Phox\TypeSafe\Exceptions\TypeSafeException;
 use Phox\TypeSafe\Questions\Box;
 use Phox\TypeSafe\Testing\FakeAnswers;
 use Phox\TypeSafe\Testing\FakeTypeSafe;
 use Phox\TypeSafe\Testing\SimulatedAnswer;
 use Phox\TypeSafe\Tests\Support\ClientTestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 
 final class BoxTest extends ClientTestCase
@@ -67,12 +69,80 @@ final class BoxTest extends ClientTestCase
     }
 
     #[Test]
-    public function a_box_question_is_refused_on_openrouter_before_sending(): void
+    public function a_box_question_goes_to_openrouter_with_its_image_inline(): void
     {
-        $this->expectException(TypeSafeException::class);
-        $this->expectExceptionMessage('The openrouter provider does not take box questions');
+        $this->transport->queue(['model' => 'typesafe/jev-1.14', 'answers' => ['dog' => ['type' => 'box', 'box' => ['top' => 0.1, 'bottom' => 0.6, 'left' => 0.25, 'right' => 0.75]]]]);
+        $photo = Image::fromBytes(self::PNG);
 
-        $this->client()->openRouter()->systemOne()->state('text')->box('dog')->send();
+        $answer = $this->client()->openRouter()->systemOne()->state($photo)->box('dog', 'The dog')->send()->box('dog');
+
+        self::assertSame(0.25, $answer->left());
+        self::assertSame(
+            ['type' => 'image_url', 'image_url' => ['url' => 'data:image/png;base64,' . base64_encode(self::PNG)]],
+            $this->transport->lastBody()['state'],
+        );
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>}>
+     */
+    public static function oldBuildRejections(): array
+    {
+        $typesafe = ['detail' => ['error_type' => 'api_usage_error', 'message' => 'Invalid request.']];
+
+        return [
+            'TypeSafe' => [$typesafe],
+            'OpenRouter' => [['error' => ['message' => 'HTTP 400: ' . json_encode($typesafe), 'code' => 400]]],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    #[Test]
+    #[DataProvider('oldBuildRejections')]
+    public function a_bare_400_to_a_box_question_names_the_build_it_needs(array $body): void
+    {
+        $this->transport->queue($body, 400, ['x-typesafe-request-id' => 'req-1']);
+
+        try {
+            $this->client()->systemOne()->model('jev-latest')->state('text')->box('dog')->send();
+            self::fail('Expected a BadRequestException.');
+        } catch (BadRequestException $exception) {
+            self::assertStringContainsString('Invalid request.', $exception->getMessage());
+            self::assertStringContainsString('Box questions need Jev 1.14 or newer; "jev-latest" may resolve to an older build.', $exception->getMessage());
+            self::assertSame($body, $exception->getBody());
+            self::assertSame('req-1', $exception->getRequestId());
+        }
+    }
+
+    #[Test]
+    public function a_400_naming_its_cause_is_not_blamed_on_the_build(): void
+    {
+        $this->transport->queue(['detail' => ['error_type' => 'api_usage_error', 'message' => 'Invalid image dimensions.']], 400);
+
+        $this->expectException(BadRequestException::class);
+        $this->expectExceptionMessage('400 Invalid image dimensions.');
+
+        try {
+            $this->client()->systemOne()->state('text')->box('dog')->send();
+        } catch (BadRequestException $exception) {
+            self::assertStringNotContainsString('Jev 1.14', $exception->getMessage());
+            throw $exception;
+        }
+    }
+
+    #[Test]
+    public function a_bare_400_without_a_box_question_has_no_hint(): void
+    {
+        $this->transport->queue(['detail' => ['error_type' => 'api_usage_error', 'message' => 'Invalid request.']], 400);
+
+        try {
+            $this->client()->systemOne()->state('text')->noul('dog')->send();
+            self::fail('Expected a BadRequestException.');
+        } catch (BadRequestException $exception) {
+            self::assertSame('400 Invalid request.', $exception->getMessage());
+        }
     }
 
     #[Test]

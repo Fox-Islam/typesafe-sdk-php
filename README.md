@@ -37,8 +37,9 @@ echo $response->choice('category')->confidence();  // 0.91
 ## Providers
 
 Jev is served both by TypeSafe directly and by OpenRouter's System One endpoint.
-The request and answer bodies are the same on both, so the provider only decides
-the host, the path and which key is read:
+The answer bodies are the same on both, and so are the request bodies apart from
+images, so the provider decides the host, the path, which key is read and how
+images are sent:
 
 ```php
 $client = Client::make()->openRouter();   // reads OPENROUTER_API_KEY
@@ -54,7 +55,7 @@ or set `TYPESAFE_PROVIDER=openrouter` and construct the client normally.
 | Request id | `x-typesafe-request-id` | `x-generation-id`, also in the body |
 | Per-call cost | not reported | `$response->usage()->cost()` |
 | `models()->list()` | yes | no catalogue — name the model directly |
-| Images and box questions | yes | no; refused before sending |
+| Images | uploaded as `multipart/form-data` | inline as base64 `image_url` parts |
 
 `baseUrl` and `apiKey` follow the provider when you switch, unless you set
 either of them yourself, in which case yours is kept:
@@ -212,7 +213,9 @@ $answer->probabilities();  // [0 => 0.1, 1 => 0.4, 2 => 0.5]
 Locates what the instructions describe in the request's image. It needs an
 image in the request (see [Images](#images)) and Jev 1.14 or newer, such as
 `jev-preview`. An older build answers a box question with a bare
-`400 Invalid request.`; on 2026-10-14 `jev-latest` resolved to 1.13.
+`400 Invalid request.`, to which the SDK adds that box questions need Jev 1.14;
+on 2026-10-14 `jev-latest` resolved to 1.13 calling
+TypeSafe directly, and to 1.14 on OpenRouter, which has no `jev-preview`.
 
 ```php
 use Phox\TypeSafe\Assets\Image;
@@ -263,9 +266,10 @@ $client->systemOne()
     ->send();
 ```
 
-Each image is written as a reference, `<image:…>`, and uploaded once alongside
-the JSON as `multipart/form-data`. The model receives a copy of the image every
-time a reference appears, and each copy is billed as input tokens.
+Calling TypeSafe, each image is written as a reference, `<image:…>`, and
+uploaded once alongside the JSON as `multipart/form-data`. The model receives a
+copy of the image every time a reference appears, and each copy is billed as
+input tokens.
 
 An image interpolated into a string is found again through that reference, so
 it must be alive when the call is sent: `'See ' . Image::fromPath($p)` frees the
@@ -292,9 +296,10 @@ each, and rejects anything outside that instead of resizing it. It ignores EXIF
 orientation, so rotate the pixels upright first. The API checks these limits,
 not the SDK; see [the image docs](https://docs.typesafe.ai/images).
 
-Only TypeSafe's own endpoint takes images. OpenRouter rejects the upload and
-silently drops images sent as base64, so on that provider `send()` throws before
-anything goes out.
+OpenRouter takes no uploads, so there each image is written into the JSON where
+it was placed, as an `image_url` part carrying a base64 data URI. A
+string with text around an image becomes a list of the text and the image, in
+order. OpenRouter does not need the images header.
 
 ## Asking several questions at once
 
@@ -613,7 +618,7 @@ terms of questions rather than JSON.
 | --- | --- |
 | `state()`, `model()` | what the call was about, and the model it resolved to |
 | `questions()`, `question($name)`, `questionType($name)`, `asked($name)` | the questions as sent |
-| `images()` | the image files uploaded, keyed by the reference they were sent under |
+| `images()` | the image files sent, keyed by the reference they were sent under, or by order on OpenRouter |
 | `method()`, `url()`, `path()`, `headers()`, `header($name)` | the request itself |
 | `retryCount()`, `timeout()` | which attempt this was, and what it was allowed |
 | `body()`, `request()` | the raw payload and the PSR-7 request |

@@ -9,6 +9,7 @@ use Phox\TypeSafe\Exceptions\TypeSafeException;
 use Phox\TypeSafe\Questions\Choice;
 use Phox\TypeSafe\Questions\Noul;
 use Phox\TypeSafe\Support\Multipart;
+use Phox\TypeSafe\Testing\FakeTypeSafe;
 use Phox\TypeSafe\Tests\Support\ClientTestCase;
 use PHPUnit\Framework\Attributes\Test;
 
@@ -120,18 +121,39 @@ final class ImageTest extends ClientTestCase
     }
 
     #[Test]
-    public function images_are_refused_on_openrouter_before_sending(): void
+    public function images_go_to_openrouter_as_inline_parts_where_they_are_placed(): void
     {
-        $photo = Image::fromBytes(self::PNG);
+        $this->transport->queue(['model' => 'jev-latest', 'answers' => []]);
+        $upload = Image::fromBytes(self::JPEG);
+        $catalog = Image::fromBytes(self::PNG);
+        $part = static fn (string $type, string $bytes): array => ['type' => 'image_url', 'image_url' => ['url' => "data:{$type};base64," . base64_encode($bytes)]];
 
-        $this->expectException(TypeSafeException::class);
-        $this->expectExceptionMessage('The openrouter provider does not take images');
+        $this->client()->openRouter()->systemOne()
+            ->state(['note' => 'Returned.', 'photo' => $upload])
+            ->ask('same', Noul::ask("Is {$upload} the product in <catalog>?"))
+            ->asset('<catalog>', $catalog)
+            ->send();
 
-        try {
-            $this->client()->openRouter()->systemOne()->state($photo)->noul('x')->send();
-        } finally {
-            self::assertSame(0, $this->transport->callCount());
-        }
+        $body = $this->transport->lastBody();
+        self::assertSame('application/json', $this->transport->lastRequest()->getHeaderLine('Content-Type'));
+        self::assertArrayNotHasKey('assets', $body);
+        self::assertSame(['note' => 'Returned.', 'photo' => $part('image/jpeg', self::JPEG)], $body['state']);
+        self::assertSame(
+            ['Is ', $part('image/jpeg', self::JPEG), ' the product in ', $part('image/png', self::PNG), '?'],
+            $body['questions']['same']['instructions'],
+        );
+    }
+
+    #[Test]
+    public function the_fake_reports_images_sent_inline_in_order(): void
+    {
+        $fake = new FakeTypeSafe();
+        $first = Image::fromBytes(self::JPEG);
+        $second = Image::fromBytes(self::PNG);
+
+        $fake->client()->openRouter()->systemOne()->state("{$first} then {$second}")->noul('x')->send();
+
+        self::assertSame([self::JPEG, self::PNG], $fake->lastCall()->images());
     }
 
     #[Test]
