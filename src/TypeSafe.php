@@ -9,7 +9,7 @@ namespace Phox\TypeSafe;
  */
 final class TypeSafe
 {
-    public const string VERSION = '0.5.1';
+    public const string VERSION = '0.5.2';
 
     public const string DEFAULT_BASE_URL = 'https://api.typesafe.ai';
     public const string DEFAULT_MODEL = 'jev-latest';
